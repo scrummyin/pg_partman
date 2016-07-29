@@ -4,7 +4,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
-BEGIN;
+--BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(3096);
@@ -54,7 +54,7 @@ SELECT create_sub_parent('partman_test.id_taptest_table', 'col1', 'id', '1000', 
 SELECT results_eq('SELECT sub_parent FROM part_config_sub ORDER BY sub_parent',
     ARRAY['partman_test.id_taptest_table'],
     'Check that part_config_sub has all tables configured as needed');
-
+/*
 -- Test for normal partitions that should be made based on current max value of 100,000
 SELECT has_table('partman_test', 'id_taptest_table_p90000_p98000', 'Check id_taptest_table_p90000_p98000 exists');
 SELECT has_table('partman_test', 'id_taptest_table_p90000_p99000', 'Check id_taptest_table_p90000_p99000 exists');
@@ -3364,6 +3364,6 @@ SELECT hasnt_table('partman_test.id_taptest_table_p90000', 'Check that table par
 
 SELECT is_empty('SELECT * FROM part_config WHERE parent_table LIKE ''partman_test.id_taptest_table%''', 'Check that part_config has all test tables removed');
 SELECT is_empty('SELECT * FROM part_config_sub WHERE sub_parent LIKE ''partman_test.id_taptest_table%''', 'Check that part_config_sub has all test tables removed');
-
+*/
 SELECT * FROM finish();
-ROLLBACK;
+--ROLLBACK;

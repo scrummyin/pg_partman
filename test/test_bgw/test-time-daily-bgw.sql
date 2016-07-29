@@ -11,7 +11,7 @@
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(108);
-CREATE SCHEMA partman_test;
+CREATE SCHEMA IF NOT EXISTS partman_test;
 CREATE SCHEMA partman_retention_test;
 CREATE ROLE partman_basic;
 CREATE ROLE partman_revoke;

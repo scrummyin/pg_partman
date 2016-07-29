@@ -3,7 +3,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
-BEGIN;
+--BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(151);
@@ -21,7 +21,7 @@ GRANT ALL ON partman_test.time_taptest_table TO partman_revoke;
 SELECT create_parent('partman_test.time_taptest_table', 'col3', 'time', 'quarter-hour');
 -- Must run_maintenance because when interval time is between 1 hour and 1 minute, the first partition name done by above is always the nearest hour rounded down 
 SELECT run_maintenance();
-SELECT has_table('partman_test', 'time_taptest_table_p'||to_char(date_trunc('hour', CURRENT_TIMESTAMP) + 
+/*SELECT has_table('partman_test', 'time_taptest_table_p'||to_char(date_trunc('hour', CURRENT_TIMESTAMP) + 
                 '15min'::interval * floor(date_part('minute', CURRENT_TIMESTAMP) / 15.0), 'YYYY_MM_DD_HH24MI'), 'Check time_taptest_table_'||to_char(date_trunc('hour', CURRENT_TIMESTAMP) + 
                 '15min'::interval * floor(date_part('minute', CURRENT_TIMESTAMP) / 15.0), 'YYYY_MM_DD_HH24MI')||' exists');
 SELECT has_table('partman_test', 'time_taptest_table_p'||to_char(date_trunc('hour', CURRENT_TIMESTAMP) + 
@@ -692,6 +692,6 @@ SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(date_trunc('h
                 '15min'::interval * floor(date_part('minute', CURRENT_TIMESTAMP) / 15.0)+'165 mins'::interval, 'YYYY_MM_DD_HH24MI'), 
     'Check time_taptest_table_'||to_char(date_trunc('hour', CURRENT_TIMESTAMP) + 
                 '15min'::interval * floor(date_part('minute', CURRENT_TIMESTAMP) / 15.0)+'165 mins'::interval, 'YYYY_MM_DD_HH24MI')||' does not exist');
-
+*/
 SELECT * FROM finish();
-ROLLBACK;
+--ROLLBACK;

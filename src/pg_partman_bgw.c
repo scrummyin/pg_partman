@@ -19,6 +19,7 @@
 #include "storage/shmem.h"
 
 /* these headers are used by this particular worker's code */
+#include "utils/date.h"
 #include "access/xact.h"
 #include "executor/spi.h"
 #include "fmgr.h"
@@ -33,6 +34,7 @@ PG_MODULE_MAGIC;
 void    _PG_init(void);
 void    pg_partman_bgw_main(Datum);
 void    pg_partman_bgw_run_maint(Datum);
+void    pg_partman_run_maintenance_c(char*);
 
 /* flags set by signal handlers */
 static volatile sig_atomic_t got_sighup = false;
@@ -308,10 +310,10 @@ void pg_partman_bgw_main(Datum main_arg) {
  */
 void pg_partman_bgw_run_maint(Datum arg) {
 
-    char                *analyze;
+//TODO REMOVE    char                *analyze;
     char                *dbname = "template1";
-    char                *jobmon;
-    char                *partman_schema;
+//TODO REMOVE    char                *jobmon;
+//TODO REMOVE    char                *partman_schema;
     char                *rawstring;
     int                 dbcounter;
     int                 db_main_counter = DatumGetInt32(arg);
@@ -387,6 +389,11 @@ void pg_partman_bgw_run_maint(Datum arg) {
         return;
     }
 
+    SPI_finish();
+    PopActiveSnapshot();
+    CommitTransactionCommand();
+    pgstat_report_activity(STATE_IDLE, NULL);
+
     // If so then actually log that it's started for that database. 
     elog(LOG, "%s dynamic background worker initialized with role %s on database %s"
             , MyBgworkerEntry->bgw_name
@@ -394,6 +401,10 @@ void pg_partman_bgw_run_maint(Datum arg) {
             , dbname);
 
     resetStringInfo(&buf);
+
+    pg_partman_run_maintenance_c(dbname);
+
+/* TODO REMOVE
     appendStringInfo(&buf, "SELECT n.nspname FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON e.extnamespace = n.oid WHERE extname = 'pg_partman'");
     pgstat_report_activity(STATE_RUNNING, buf.data);
     ret = SPI_execute(buf.data, true, 1);
@@ -447,6 +458,8 @@ void pg_partman_bgw_run_maint(Datum arg) {
     PopActiveSnapshot();
     CommitTransactionCommand();
     pgstat_report_activity(STATE_IDLE, NULL);
+*/
+
     elog(DEBUG1, "pg_partman dynamic BGW shutting down gracefully for database %s.", dbname);
 
     pfree(rawstring);
@@ -455,3 +468,187 @@ void pg_partman_bgw_run_maint(Datum arg) {
     return;
 }
 
+void pg_partman_run_maintenance_c(char *dbname) {
+/* Add jobmon stuff in later if possible */
+
+//    char                *analyze;
+//    char                *jobmon;
+    char                *partman_schema;
+    char                *parent_table;
+    int                 ret;
+    int                 i;
+    StringInfoData      buf;
+    
+    SetCurrentStatementStartTimestamp();
+    StartTransactionCommand();
+    SPI_connect();
+    PushActiveSnapshot(GetTransactionSnapshot());
+
+    initStringInfo(&buf);
+    appendStringInfo(&buf, "SELECT n.nspname FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON e.extnamespace = n.oid WHERE extname = 'pg_partman'");
+    pgstat_report_activity(STATE_RUNNING, buf.data);
+    ret = SPI_execute(buf.data, true, 1);
+
+    if (ret != SPI_OK_SELECT) {
+        elog(FATAL, "Cannot determine which schema pg_partman has been installed to: error code %d", ret);
+    }
+
+    if (SPI_processed > 0) {
+
+        partman_schema = SPI_getvalue(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1);
+/* Left here as example for when needing to check for null
+ *          partman_schema = DatumGetCString(SPI_getbinval(SPI_tuptable->vals[0]
+                , SPI_tuptable->tupdesc
+                , 1
+                , &isnull));
+*/
+    } else {
+        elog(FATAL, "Query to determine pg_partman schema returned zero rows.");
+    }
+/* TODO
+    if (strcmp(pg_partman_bgw_analyze, "on") == 0) {
+        analyze = "true";
+    } else {
+        analyze = "false";
+    }
+    if (strcmp(pg_partman_bgw_jobmon, "on") == 0) {
+        jobmon = "true";
+    } else {
+        jobmon = "false";
+    }
+   */ 
+    resetStringInfo(&buf);
+    appendStringInfo(&buf, "SELECT parent_table, partition_type, partition_interval, control, premake, datetime_string, undo_in_progress, sub_partition_set_full, epoch, infinite_time_partitions FROM %s.part_config WHERE sub_partition_set_full = false AND use_run_maintenance = true", partman_schema);
+    pgstat_report_activity(STATE_RUNNING, buf.data);
+    ret = SPI_execute(buf.data, true, 0);
+    if (ret != SPI_OK_SELECT) {
+        elog(FATAL, "Cannot get list of partitions to run maintenance on: error code %d", ret);
+    }
+    //TODO REMOVE
+    elog(LOG, "SPI_Processed: %d", SPI_processed);
+    if (SPI_processed > 0) {
+        int                 premake;
+        int                 parent_table_count;
+        char                *partition_type;
+        char                *partition_interval;
+        char                *control;
+        char                *datetime_string;
+        char                *parent_schemaname;
+        char                *parent_tablename;
+        char                *last_partition;
+        bool                epoch;
+        bool                infinite_time_partitions;
+        bool                datetime_isnull;
+        bool                sub_partition_set_full;
+        bool                undo_in_progress;
+        bool                isnull; // generic one for columns I don't care because they can't be null
+        SPITupleTable       *parent_table_rows;
+
+        parent_table_rows = SPI_tuptable;
+        parent_table_count = SPI_processed;
+
+        for (i=0; i < parent_table_count; i++) {
+            parent_table = SPI_getvalue(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "parent_table")); 
+            partition_type = SPI_getvalue(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "partition_type")); 
+            partition_interval = SPI_getvalue(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "partition_interval")); 
+            control = SPI_getvalue(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "control")); 
+            premake = DatumGetInt32(SPI_getbinval(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "premake"), &isnull)); 
+            datetime_string = DatumGetCString(SPI_getbinval(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "datetime_string"), &datetime_isnull)); 
+            undo_in_progress = DatumGetBool(SPI_getbinval(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "undo_in_progress"), &isnull)); 
+            sub_partition_set_full = DatumGetBool(SPI_getbinval(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "sub_partition_set_full"), &isnull)); 
+            epoch = DatumGetBool(SPI_getbinval(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "epoch"), &isnull)); 
+            infinite_time_partitions = DatumGetBool(SPI_getbinval(parent_table_rows->vals[i], parent_table_rows->tupdesc, SPI_fnumber(parent_table_rows->tupdesc, "infinite_time_partitions"), &isnull)); 
+
+            elog(LOG, "Just checking that this thing is working. Loop: %d, parent_table: %s, partition_type: %s, partition_interval: %s, control: %s, premake: %d, datetime_string: %s, undo_in_progress: %d, sub_partition_set_full: %d, epoch: %d, infinite_time_partitions: %d", i, parent_table, partition_type, partition_interval, control, premake, datetime_string, undo_in_progress, sub_partition_set_full, epoch, infinite_time_partitions);
+
+            if(undo_in_progress != 0) {
+                continue;
+            } 
+
+            resetStringInfo(&buf);
+            /* Check for consistent data in part_config_sub table. Was unable to get this working properly as either a constraint or trigger. 
+             * Would either delay raising an error until the next write (which I cannot predict) or disallow future edits to update a sub-partition set's configuration.
+             * This way at least provides a consistent way to check that I know will run. If anyone can get a working constraint/trigger, please help!
+             * Don't have to worry about this in the serial trigger maintenance since subpartitioning requires run_maintenance(). */
+            appendStringInfo(&buf, "SELECT sub_parent FROM %s.part_config_sub WHERE sub_parent = '%s'", partman_schema, parent_table);
+            pgstat_report_activity(STATE_RUNNING, buf.data);
+            ret = SPI_execute(buf.data, true, 1);
+            if (SPI_processed > 0) {
+                char    *sub_parent;
+                int     check_subpart;
+
+                sub_parent = DatumGetCString(SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &isnull));
+                resetStringInfo(&buf);
+                appendStringInfo(&buf, "SELECT count(*) FROM %s.check_subpart_sameconfig('%s')", partman_schema, parent_table);
+                pgstat_report_activity(STATE_RUNNING, buf.data);
+                elog(DEBUG1, "Checking for consistent sub-partition configurations");
+                ret = SPI_execute(buf.data, true, 1);
+                check_subpart = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &isnull));
+                if(check_subpart > 1) {
+                    elog(FATAL, "Inconsistent data in part_config_sub table. Sub-partition tables that are themselves sub-partitions cannot have differing configuration values among their siblings.\nRun this query: \"SELECT * FROM @extschema@.check_subpart_sameconfig(''%s'');\" This should only return a single row or nothing.\nIf multiple rows are returned, results are all children of the given parent. Update the differing values to be consistent for your desired values.", sub_parent);
+                }
+            } // end sub_parent check if
+
+            resetStringInfo(&buf);
+            appendStringInfo(&buf, "SELECT schemaname, tablename FROM pg_catalog.pg_tables WHERE schemaname = split_part('%s', '.', 1)::name AND tablename = split_part('%s', '.', 2)::name", parent_table, parent_table);
+            pgstat_report_activity(STATE_RUNNING, buf.data);
+            ret = SPI_execute(buf.data, true, 1);
+            if (ret == SPI_OK_SELECT && SPI_processed > 0) {
+                parent_schemaname = SPI_getvalue(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, SPI_fnumber(SPI_tuptable->tupdesc, "schemaname")); 
+                parent_tablename = SPI_getvalue(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, SPI_fnumber(SPI_tuptable->tupdesc, "tablename")); 
+
+
+            } else {
+                elog(FATAL, "Unable to find parent table in catalog lookup (%s)", parent_table);
+            }
+
+            resetStringInfo(&buf);
+            appendStringInfo(&buf, "SELECT partition_tablename FROM %s.show_partitions('%s', 'DESC') LIMIT 1", partman_schema, parent_table);
+            ret = SPI_execute(buf.data, true, 1);
+            last_partition = SPI_getvalue(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, SPI_fnumber(SPI_tuptable->tupdesc, "partition_tablename")); 
+
+            resetStringInfo(&buf);
+            if ( strcmp(partition_type, "time") == 0 || strcmp(partition_type, "time-custom") == 0 ) {
+                TimeTzADT    *last_partition_timestamp;
+
+                appendStringInfo(&buf, "SELECT child_start_time FROM %s.show_partition_info('%s.%s', '%s', '%s')"
+                        , partman_schema
+                        , parent_schemaname
+                        , last_partition
+                        , partition_interval
+                        , parent_table);
+
+                ret = SPI_execute(buf.data, true, 1);
+                ereport(NOTICE, (errmsg("query=%s", buf.data)));
+                ereport(NOTICE, (errmsg("ret=%i -- rows=%ju", ret, SPI_processed)));
+
+                last_partition_timestamp = DatumGetTimeTzADTP(SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &isnull));
+
+                ereport(NOTICE, (errmsg("SPI_result=%d -- ptr=%p", SPI_result, (void*)last_partition_timestamp )));
+//                last_partition_timestamp = DatumGetTimeTzADTP(SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &isnull));
+                
+                elog(LOG, "Just seeing if it's time partitioned: %ld", last_partition_timestamp->time);
+                //elog(LOG, "Just seeing if it's time partitioned: %s", last_partition );
+            // end time if section
+            } else if ( strcmp(partition_type, "id") == 0 ) {
+                elog(LOG, "Just seeing if it's id partitioned: %s.%s", parent_schemaname, parent_tablename);
+
+            // end id if section
+            }
+
+
+            // TODO May not have to have giant separate IF/ELSE for time vs id maintenance. Just use different Datum retrieval functions
+        } // end part_config for loop
+
+    } else {
+        elog(DEBUG1, "Found no partitions in part_config to run maintenance on for database: %s.", dbname);
+    } 
+
+    SPI_finish();
+    PopActiveSnapshot();
+    CommitTransactionCommand();
+    pgstat_report_activity(STATE_IDLE, NULL);
+
+    //  pfree of SPI_getvalue() variables causing crash. check if this is actually needed?
+//    pfree(partman_schema);
+}
