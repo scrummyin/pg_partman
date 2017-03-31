@@ -2,9 +2,10 @@
  * Truncate the name of the given object if it is greater than the postgres default max (63 characters).
  * Also appends given suffix and schema if given and truncates the name so that the entire suffix will fit.
  * Returns original name with schema given if it doesn't require truncation
+ * Given security definer since it's called by the trigger functions
  */
 CREATE FUNCTION check_name_length (p_object_name text, p_suffix text DEFAULT NULL, p_table_partition boolean DEFAULT FALSE) RETURNS text
-    LANGUAGE plpgsql IMMUTABLE
+    LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER
     AS $$
 DECLARE
     v_new_length    int;

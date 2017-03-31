@@ -19,6 +19,7 @@ v_parent_schema     text;
 v_parent_tablename  text;
 v_ref_schema        text;
 v_ref_table         text;
+v_relkind           char;
 v_row               record;
 v_schemaname        text;
 v_sql               text;
@@ -37,6 +38,24 @@ IF v_jobmon THEN
     END IF;
 END IF;
 
+SELECT n.nspname, c.relname, c.relkind INTO v_parent_schema, v_parent_tablename, v_relkind
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+WHERE n.nspname = split_part(p_parent_table, '.', 1)::name
+AND c.relname = split_part(p_parent_table, '.', 2)::name;
+
+IF v_relkind = 'p' THEN
+    RAISE EXCEPTION 'This function cannot run on natively partitioned tables';
+ELSIF v_relkind IS NULL THEN
+    RAISE EXCEPTION 'Unable to find given table in system catalogs: %.%', v_parent_schema, v_parent_tablename;
+END IF;
+
+SELECT n.nspname, c.relname INTO v_schemaname, v_tablename 
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+WHERE n.nspname = split_part(p_child_table, '.', 1)::name
+AND c.relname = split_part(p_child_table, '.', 2)::name;
+
 IF v_jobmon_schema IS NOT NULL THEN
     IF p_job_id IS NULL THEN
         v_job_id := add_job(format('PARTMAN APPLYING FOREIGN KEYS: %s', p_parent_table));
@@ -48,16 +67,6 @@ END IF;
 IF v_jobmon_schema IS NOT NULL THEN
     v_step_id := add_step(v_job_id, format('Applying foreign keys to %s if they exist on parent', p_child_table));
 END IF;
-
-SELECT schemaname, tablename INTO v_parent_schema, v_parent_tablename
-FROM pg_catalog.pg_tables
-WHERE schemaname = split_part(p_parent_table, '.', 1)::name
-AND tablename = split_part(p_parent_table, '.', 2)::name;
-
-SELECT schemaname, tablename INTO v_schemaname, v_tablename 
-FROM pg_catalog.pg_tables 
-WHERE schemaname = split_part(p_child_table, '.', 1)::name
-AND tablename = split_part(p_child_table, '.', 2)::name;
 
 IF v_tablename IS NULL THEN
     IF v_jobmon_schema IS NOT NULL THEN
@@ -128,4 +137,5 @@ DETAIL: %
 HINT: %', ex_message, ex_context, ex_detail, ex_hint;
 END
 $$;
+
 

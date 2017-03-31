@@ -28,6 +28,11 @@
 #include "utils/snapmgr.h"
 #include "tcop/utility.h"
 
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/varlena.h"
+#endif
+
+
 PG_MODULE_MAGIC;
 
 void        _PG_init(void);
@@ -314,9 +319,17 @@ void pg_partman_bgw_main(Datum main_arg) {
 
         elog(DEBUG1, "Latch status just before waitlatch call: %d", MyProc->procLatch.is_set);
 
+        #if (PG_VERSION_NUM >= 100000)
+        rc = WaitLatch(&MyProc->procLatch,
+                       WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+                       pg_partman_bgw_interval * 1000L,
+                       PG_WAIT_EXTENSION);
+        #endif
+        #if (PG_VERSION_NUM < 100000)
         rc = WaitLatch(&MyProc->procLatch,
                        WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
                        pg_partman_bgw_interval * 1000L);
+        #endif
         /* emergency bailout if postmaster has died */
         if (rc & WL_POSTMASTER_DEATH) {
             proc_exit(1);

@@ -9,12 +9,25 @@ DECLARE
     v_new_search_path   text := '@extschema@,pg_temp';
     v_old_search_path   text;
     v_parent_indexdef   text;
+    v_relkind           char;
     v_row               record;
     v_sql               text;
 BEGIN
     
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');
+
+SELECT c.relkind INTO v_relkind
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+WHERE n.nspname = p_parent_schema
+AND c.relname = p_parent_tablename;
+
+IF v_relkind = 'p' THEN
+    RAISE EXCEPTION 'This function cannot run on natively partitioned tables';
+ELSIF v_relkind IS NULL THEN
+    RAISE EXCEPTION 'Unable to find given table in system catalogs: %.%', v_parent_schema, v_parent_tablename;
+END IF;
 
 WITH parent_info AS (
     SELECT c.oid AS parent_oid 
