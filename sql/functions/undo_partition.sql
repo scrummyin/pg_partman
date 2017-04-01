@@ -40,6 +40,7 @@ BEGIN
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition'));
 IF v_adv_lock = 'false' THEN
     RAISE NOTICE 'undo_partition already running.';
+    partitions_undone = -1;
     RETURN;
 END IF;
 

@@ -1,5 +1,3 @@
---TODO Update automatic_partition parameter in create_parent in docs. See TODO. Read over rest of pg_partman.md
-
 -- IMPORTANT NOTE: The initial version of pg_partman 3 had to be split into two updates due to changing both the data in the config table as well as adding constraints on that data. Depending on the data contained in the config table, doing this in a single-transaction update may not work (you may see an error about pending trigger events). If this is the case, please update to version 3.0.1 in a separate transaction from your update to 3.0.0. Example:
     
     /*
@@ -33,7 +31,7 @@
 
 -- The undo_partition plpgsql functions now return both the number of partitions undone as well as the number of rows copied/moved. Result is returned as a record set, so these functions can be queried as a table to have columns/rows returned. The value of undone partitions will be -1 when an issue is encountered while running the function.
 
--- Improved performance if infinite_time_partitions flag is set to true. No longer obtains max value of partition set needlessly. (Github Issue #169)
+-- Improved performance if infinite_time_partitions flag is set to true. No longer obtains max value of partition set needlessly. (Github Pull Request #169)
 
 -- Added create_partition_time() & create_partition_id() to documenation. Had thought they were only really useful internally, but turns out they can be pretty useful in general to fill in missing children gaps. (Github Issue #161).
 
@@ -45,9 +43,6 @@
     -- If the parent table given as an argument to the undo function had an entry in part_config_sub, it is now always removed.
     -- By default, if you undo a child table that is also partitioned, it will not stop additional sibling children of the parent partition set from being subpartitioned unless that parent is also undone.
     -- To handle the above situation where you may not be removing the parent but don't want any additional subpartitioned children, a new function has been added: stop_sub_partition().
-
-
--- Fixed bug in undo_partition() that would cause it to fail if there were no child tables left to remove.
 
 -- Fixed bug in undo_partition.py that would stop undoing the partition set if it hit a child table with zero rows. Script now returns the number of partitions undone instead of the rowcount moved.
 -- Also fixed bug in undo_partition.py that would mask any python errors and let script run as if nothing bad happened.
@@ -5266,6 +5261,7 @@ BEGIN
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition'));
 IF v_adv_lock = 'false' THEN
     RAISE NOTICE 'undo_partition already running.';
+    partitions_undone = -1;
     RETURN;
 END IF;
 
