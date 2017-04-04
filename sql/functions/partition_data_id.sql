@@ -1,6 +1,3 @@
-/*
- * Populate the child table(s) of an id-based partition set with old data from the original parent
- */
 CREATE FUNCTION partition_data_id(p_parent_table text
         , p_batch_count int DEFAULT 1
         , p_batch_interval bigint DEFAULT NULL
@@ -32,6 +29,9 @@ v_start_control             bigint;
 v_total_rows                bigint := 0;
 
 BEGIN
+/*
+ * Populate the child table(s) of an id-based partition set with old data from the original parent
+ */
 
 SELECT partition_interval::bigint
     , control
@@ -155,4 +155,5 @@ RETURN v_total_rows;
 
 END
 $$;
+
 

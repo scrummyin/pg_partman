@@ -1,6 +1,3 @@
-/*
- * Apply foreign keys that exist on the given parent to the given child table
- */
 CREATE FUNCTION apply_foreign_keys(p_parent_table text, p_child_table text, p_job_id bigint DEFAULT NULL, p_debug boolean DEFAULT false) RETURNS void
     LANGUAGE plpgsql
     AS $$
@@ -27,6 +24,9 @@ v_step_id           bigint;
 v_tablename         text;
 
 BEGIN
+/*
+ * Apply foreign keys that exist on the given parent to the given child table
+ */
 
 SELECT jobmon INTO v_jobmon FROM @extschema@.part_config WHERE parent_table = p_parent_table;
 

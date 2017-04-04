@@ -199,6 +199,22 @@ As a note for people that were not aware, you can name arguments in function cal
  * `p_analyze` - If a new child table is created, an analyze is normally kicked off so that the statistics are aware of the constraint boundaries for constraint exclusion. For larger partition sets, this analyze can take a long time. Set this to false to skip this automatic analyze.
  * Returns TRUE if any child tables were created for the given integer values. Returns false if no child tables were created.
 
+
+*`create_function_time(p_parent_table text, p_job_id bigint DEFAULT NULL) RETURNS void`*
+ * This function is used to create the trigger function for non-native time-based partitioning.
+ * Normally this function is never called manually since function creation is managed by run_maintenance(). But if you need to force the re-creation of the trigger function, this will let you do that.
+ * `p_parent_table` - parent table to recreate trigger function on.
+ * The p_job_id parameter is optional. It's for internal use and allows job logging to be consolidated into the original job that called this function if applicable.
+
+
+*`create_function_id(p_parent_table text, p_job_id bigint DEFAULT NULL) RETURNS void`*
+
+ * This function is used to create the trigger function for non-native serial partitioning.
+ * Normally this function is never called manually since function creation is managed by run_maintenance(). But if you need to force the re-creation of the trigger function, this will let you do that.
+ * `p_parent_table` - parent table to recreate trigger function on.
+ * The p_job_id parameter is optional. It's for internal use and allows job logging to be consolidated into the original job that called this function if applicable.
+
+
 ### Maintenance Functions
 
 *`run_maintenance(p_parent_table text DEFAULT NULL, p_analyze boolean DEFAULT true, p_jobmon boolean DEFAULT true, p_debug boolean DEFAULT false) RETURNS void`*
@@ -280,9 +296,10 @@ As a note for people that were not aware, you can name arguments in function cal
  * The p_job_id parameter is optional. It's for internal use and allows job logging to be consolidated into the original job that called this function if applicable.
  * The p_debug parameter will show you the constraint creation statement that was used.
 
+
 *`stop_sub_partition(p_parent_table text, p_jobmon boolean DEFAULT true) RETURNS boolean`*
  * By default, if you undo a child table that is also partitioned, it will not stop additional sibling children of the parent partition set from being subpartitioned unless that parent is also undone. To handle this situation where you may not be removing the parent but don't want any additional subpartitioned children, this function can be used.
- * This function simply deletes the p_parent_table entry from the part_config_sub table. But this gives a predictable, programatic way to do so and also provide jobmon logging for the operation.
+ * This function simply deletes the parent_table entry from the part_config_sub table. But this gives a predictable, programatic way to do so and also provides jobmon logging for the operation.
 
 
 ### Destruction Functions

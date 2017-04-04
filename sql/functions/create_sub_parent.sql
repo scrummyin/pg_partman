@@ -1,11 +1,3 @@
-/*
- * Create a partition set that is a subpartition of an already existing partition set.
- * Given the parent table of any current partition set, it will turn all existing children into parent tables of their own partition sets
- *      using the configuration options given as parameters to this function.
- * Uses another config table that allows for turning all future child partitions into a new parent automatically.
- * To avoid logical complications and contention issues, ALL subpartitions must be maintained using run_maintenance().
- * This means the automatic, trigger based partition creation for serial partitioning will not work if it is a subpartition.
- */
 CREATE FUNCTION create_sub_parent(
     p_top_parent text
     , p_control text
@@ -54,6 +46,12 @@ v_success               boolean := false;
 v_top_type              text;
 
 BEGIN
+/*
+ * Create a partition set that is a subpartition of an already existing partition set.
+ * Given the parent table of any current partition set, it will turn all existing children into parent tables of their own partition sets
+ *      using the configuration options given as parameters to this function.
+ * Uses another config table that allows for turning all future child partitions into a new parent automatically.
+ */
 
 SELECT n.nspname, c.relname, c.relkind INTO v_parent_schema, v_parent_tablename, v_parent_relkind
 FROM pg_catalog.pg_class c
@@ -267,5 +265,4 @@ RETURN v_success;
 
 END
 $$;
-
 

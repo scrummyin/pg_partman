@@ -1,10 +1,3 @@
-/*
- * Function to undo native partitioning. 
- * Moves data to new, target table since data cannot be moved to parent.
- * Leaves old parent table as is and does not change name of new table.
- * Note that target schema can be different than old parent.
- * Should work on native partitioned tables not managed by pg_partman as well.
- */
 CREATE FUNCTION undo_partition_native(p_parent_table text, p_target_table text, p_batch_count int DEFAULT 1, p_batch_interval text DEFAULT NULL, p_keep_table boolean DEFAULT true, p_lock_wait numeric DEFAULT 0, OUT partitions_undone int, OUT rows_undone bigint) RETURNS record
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -48,6 +41,13 @@ v_total                 bigint := 0;
 v_undo_count            int := 0;
 
 BEGIN
+/*
+ * Function to undo native partitioning. 
+ * Moves data to new, target table since data cannot be moved to parent.
+ * Leaves old parent table as is and does not change name of new table.
+ * Note that target schema can be different than old parent.
+ * Should work on native partitioned tables not managed by pg_partman as well.
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition_native'));
 IF v_adv_lock = 'false' THEN
@@ -397,3 +397,4 @@ DETAIL: %
 HINT: %', ex_message, ex_context, ex_detail, ex_hint;
 END
 $$;
+

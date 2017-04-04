@@ -1,6 +1,3 @@
-/*
- * Apply privileges that exist on a given parent to the given child table
- */
 CREATE FUNCTION apply_privileges(p_parent_schema text, p_parent_tablename text, p_child_schema text, p_child_tablename text, p_job_id bigint DEFAULT NULL) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -26,6 +23,9 @@ v_sql               text;
 v_step_id           bigint;
 
 BEGIN
+/*
+ * Apply privileges and ownership that exist on a given parent to the given child table
+ */
 
 SELECT jobmon INTO v_jobmon FROM @extschema@.part_config WHERE parent_table = p_parent_schema ||'.'|| p_parent_tablename;
 IF v_jobmon IS NULL THEN

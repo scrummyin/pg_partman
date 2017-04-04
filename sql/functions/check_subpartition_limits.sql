@@ -1,8 +1,3 @@
-/*
- * Check if parent table is a subpartition of an already existing partition set managed by pg_partman
- *  If so, return the limits of what child tables can be created under the given parent table based on its own suffix
- *  If not, return NULL. Allows caller to check for NULL and then know if the given parent has sub-partition limits.
- */
 CREATE FUNCTION check_subpartition_limits(p_parent_table text, p_type text, OUT sub_min text, OUT sub_max text) RETURNS record
     LANGUAGE plpgsql
     AS $$
@@ -18,6 +13,11 @@ v_top_schema            text;
 v_top_tablename         text;
 
 BEGIN
+/*
+ * Check if parent table is a subpartition of an already existing partition set managed by pg_partman
+ *  If so, return the limits of what child tables can be created under the given parent table based on its own suffix
+ *  If not, return NULL. Allows caller to check for NULL and then know if the given parent has sub-partition limits.
+ */
 
 SELECT n.nspname, c.relname INTO v_parent_schema, v_parent_tablename
 FROM pg_catalog.pg_class c
@@ -67,4 +67,5 @@ RETURN;
 
 END
 $$;
+
 

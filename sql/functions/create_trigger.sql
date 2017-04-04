@@ -1,6 +1,3 @@
-/*
- * Function to create partitioning trigger on parent table
- */
 CREATE FUNCTION create_trigger(p_parent_table text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -17,6 +14,9 @@ v_trig_name             text;
 v_trig_sql              text;
 
 BEGIN
+/*
+ * Function to create partitioning trigger on parent table
+ */
 
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');

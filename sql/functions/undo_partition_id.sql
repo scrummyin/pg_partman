@@ -1,6 +1,3 @@
-/*
- * Function to undo id-based partitioning created by this extension
- */
 CREATE FUNCTION undo_partition_id(p_parent_table text, p_batch_count int DEFAULT 1, p_batch_interval bigint DEFAULT NULL, p_keep_table boolean DEFAULT true, p_lock_wait numeric DEFAULT 0, OUT partitions_undone int, OUT rows_undone bigint) RETURNS record 
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -41,6 +38,9 @@ v_total                 bigint := 0;
 v_undo_count            int := 0;
 
 BEGIN
+/*
+ * Function to undo id-based partitioning created by this extension
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition_id'));
 IF v_adv_lock = 'false' THEN
@@ -328,5 +328,4 @@ DETAIL: %
 HINT: %', ex_message, ex_context, ex_detail, ex_hint;
 END
 $$;
-
 

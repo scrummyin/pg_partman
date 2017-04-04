@@ -1,8 +1,3 @@
-/*
- * Check PostgreSQL version number. Parameter must be full 3 point version if prior to 10.0. Otherwise 2 point version.
- * Returns true if current version is greater than or equal to the parameter given.
- * If running version is devel, alpha, beta or rc, the check always returns true.
- */
 CREATE FUNCTION check_version(p_check_version text) RETURNS boolean
     LANGUAGE plpgsql STABLE
     AS $$
@@ -12,6 +7,11 @@ v_check_version     text[];
 v_current_version   text[] := string_to_array(current_setting('server_version'), '.');
  
 BEGIN
+/*
+ * Check PostgreSQL version number. Parameter must be full 3 point version if prior to 10.0. Otherwise 2 point version.
+ * Returns true if current version is greater than or equal to the parameter given.
+ * If running version is devel, alpha, beta or rc, the check always returns true.
+ */
 
 v_check_version := string_to_array(p_check_version, '.');
 

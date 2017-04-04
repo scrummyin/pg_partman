@@ -1,6 +1,3 @@
-/*
- * Stop a given parent table from causing its children to be subpartitioned
- */
 CREATE FUNCTION stop_sub_partition(p_parent_table text, p_jobmon boolean DEFAULT true) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -11,6 +8,9 @@ v_jobmon_schema     text;
 v_step_id           bigint;
 
 BEGIN
+/*
+ * Stop a given parent table from causing its children to be subpartitioned
+ */
 
 IF p_jobmon THEN
     SELECT nspname INTO v_jobmon_schema FROM pg_catalog.pg_namespace n, pg_catalog.pg_extension e WHERE e.extname = 'pg_jobmon'::name AND e.extnamespace = n.oid;

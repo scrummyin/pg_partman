@@ -1,8 +1,3 @@
-/*
- * Show the data boundries for a given child table as well as the suffix that will be used.
- * Passing the parent table argument improves performance by avoiding a catalog lookup.
- * Passing an interval lets you set one different than the default configured one if desired.
- */
 CREATE FUNCTION show_partition_info(p_child_table text
     , p_partition_interval text DEFAULT NULL
     , p_parent_table text DEFAULT NULL
@@ -33,6 +28,11 @@ v_suffix_position       int;
 v_year                  text;
 
 BEGIN
+/*
+ * Show the data boundries for a given child table as well as the suffix that will be used.
+ * Passing the parent table argument improves performance by avoiding a catalog lookup.
+ * Passing an interval lets you set one different than the default configured one if desired.
+ */
 
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');
@@ -117,4 +117,5 @@ RETURN;
 
 END
 $$;
+
 

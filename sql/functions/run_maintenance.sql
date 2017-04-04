@@ -1,11 +1,3 @@
-/*
- * Function to manage pre-creation of the next partitions in a set.
- * Also manages dropping old partitions if the retention option is set.
- * If p_parent_table is passed, will only run run_maintenance() on that one table (no matter what the configuration table may have set for it)
- * Otherwise, will run on all tables in the config table with p_automatic_maintenance() set to true.
- * For large partition sets, running analyze can cause maintenance to take longer than expected. Can set p_analyze to false to avoid a forced analyze run.
- * Be aware that constraint exclusion may not work properly until an analyze on the partition set is run. 
- */
 CREATE FUNCTION run_maintenance(p_parent_table text DEFAULT NULL, p_analyze boolean DEFAULT true, p_jobmon boolean DEFAULT true, p_debug boolean DEFAULT false) RETURNS void 
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -61,6 +53,14 @@ v_tablename                     text;
 v_tables_list_sql               text;
 
 BEGIN
+/*
+ * Function to manage pre-creation of the next partitions in a set.
+ * Also manages dropping old partitions if the retention option is set.
+ * If p_parent_table is passed, will only run run_maintenance() on that one table (no matter what the configuration table may have set for it)
+ * Otherwise, will run on all tables in the config table with p_automatic_maintenance() set to true.
+ * For large partition sets, running analyze can cause maintenance to take longer than expected. Can set p_analyze to false to avoid a forced analyze run.
+ * Be aware that constraint exclusion may not work properly until an analyze on the partition set is run. 
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman run_maintenance'));
 IF v_adv_lock = 'false' THEN

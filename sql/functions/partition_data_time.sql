@@ -1,6 +1,3 @@
-/*
- * Populate the child table(s) of a time-based partition set with old data from the original parent
- */
 CREATE FUNCTION partition_data_time(
         p_parent_table text
         , p_batch_count int DEFAULT 1
@@ -40,6 +37,9 @@ v_type                      text;
 v_year                      text;
 
 BEGIN
+/*
+ * Populate the child table(s) of a time-based partition set with old data from the original parent
+ */
 
 SELECT partition_type
     , partition_interval::interval

@@ -1,6 +1,3 @@
-/*
- * Function to create a child table in a time-based partition set
- */
 CREATE FUNCTION create_partition_time(p_parent_table text, p_partition_times timestamptz[], p_analyze boolean DEFAULT true, p_debug boolean DEFAULT false) 
 RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
@@ -56,6 +53,9 @@ v_unlogged                      char;
 v_year                          text;
 
 BEGIN
+/*
+ * Function to create a child table in a time-based partition set
+ */
 
 SELECT c.partition_type
     , c.control

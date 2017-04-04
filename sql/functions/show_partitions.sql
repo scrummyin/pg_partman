@@ -1,6 +1,3 @@
-/*
- * Function to list all child partitions in a set in logical order.
- */
 CREATE FUNCTION show_partitions (p_parent_table text, p_order text DEFAULT 'ASC') RETURNS TABLE (partition_schemaname text, partition_tablename text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER 
     AS $$
@@ -20,6 +17,9 @@ v_type                  text;
 v_year                  text;
 
 BEGIN
+/*
+ * Function to list all child partitions in a set in logical order.
+ */
 
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');
@@ -99,4 +99,5 @@ EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_old_search_path
 
 END
 $$;
+
 

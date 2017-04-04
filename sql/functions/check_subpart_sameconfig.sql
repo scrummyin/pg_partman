@@ -1,9 +1,3 @@
-/*
- * Check for consistent data in part_config_sub table. Was unable to get this working properly as either a constraint or trigger. 
- * Would either delay raising an error until the next write (which I cannot predict) or disallow future edits to update a sub-partition set's configuration.
- * This is called by run_maintainance() and at least provides a consistent way to check that I know will run. 
- * If anyone can get a working constraint/trigger, please help!
-*/
 CREATE FUNCTION @extschema@.check_subpart_sameconfig(p_parent_table text) 
     RETURNS TABLE (sub_partition_type text
         , sub_control text
@@ -27,6 +21,12 @@ CREATE FUNCTION @extschema@.check_subpart_sameconfig(p_parent_table text)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = @extschema@,pg_temp
 AS $$
+/*
+ * Check for consistent data in part_config_sub table. Was unable to get this working properly as either a constraint or trigger. 
+ * Would either delay raising an error until the next write (which I cannot predict) or disallow future edits to update a sub-partition set's configuration.
+ * This is called by run_maintainance() and at least provides a consistent way to check that I know will run. 
+ * If anyone can get a working constraint/trigger, please help!
+*/
 
     WITH parent_info AS (
         SELECT c1.oid
@@ -65,4 +65,5 @@ AS $$
     FROM @extschema@.part_config_sub a
     JOIN child_tables b on a.sub_parent = b.tablename;
 $$;
+
 

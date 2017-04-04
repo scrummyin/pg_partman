@@ -1,7 +1,4 @@
-/*
- * Create the trigger function for the parent table of an id-based partition set
- */
-CREATE FUNCTION create_function_id(p_parent_table text, p_job_id bigint DEFAULT NULL, p_analyze boolean DEFAULT true) RETURNS void
+CREATE FUNCTION create_function_id(p_parent_table text, p_job_id bigint DEFAULT NULL) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 DECLARE
@@ -48,6 +45,9 @@ v_trigger_return_null           boolean;
 v_upsert                        text;
 
 BEGIN
+/*
+ * Create the trigger function for the parent table of an id-based partition set
+ */
 
 SELECT partition_interval::bigint
     , control

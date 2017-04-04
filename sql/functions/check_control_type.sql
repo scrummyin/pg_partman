@@ -1,10 +1,10 @@
+CREATE FUNCTION check_control_type(p_parent_schema text, p_parent_tablename text, p_control text) RETURNS TABLE (general_type text, exact_type text) 
+    LANGUAGE sql STABLE SECURITY DEFINER
+AS $$
 /* 
  * Return column type for given table & column in that table
  * Returns NULL of objects don't exist
  */
-CREATE FUNCTION check_control_type(p_parent_schema text, p_parent_tablename text, p_control text) RETURNS TABLE (general_type text, exact_type text) 
-    LANGUAGE sql STABLE SECURITY DEFINER
-AS $$
 
 SELECT CASE 
         WHEN typname IN ('timestamptz', 'timestamp', 'date') THEN
@@ -21,5 +21,4 @@ SELECT CASE
     AND c.relname = p_parent_tablename::name
     AND a.attname = p_control::name
 $$;
-
 

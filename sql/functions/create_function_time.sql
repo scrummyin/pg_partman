@@ -1,6 +1,3 @@
-/*
- * Create the trigger function for the parent table of a time-based partition set
- */
 CREATE FUNCTION create_function_time(p_parent_table text, p_job_id bigint DEFAULT NULL) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -43,6 +40,9 @@ v_type                          text;
 v_upsert                        text;
 
 BEGIN
+/*
+ * Create the trigger function for the parent table of a time-based partition set
+ */
 
 SELECT partition_type
     , partition_interval::interval

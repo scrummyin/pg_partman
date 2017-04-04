@@ -20,20 +20,30 @@
     -- If the preset time intervals in the documentation are used (daily, weekly, etc), then the more efficient, static trigger function will be used. If any other time interval value is given, then the slower, but more flexible "time-custom" trigger will be used (See "Custom Time Interval Considerations" section of documentation).
     -- "time-custom" is also still a valid value, but not necessary unless you want to be explicit in your partitioning method.
 
--- Removed automatic partition creation via trigger at 50% for id/serial partitioning. Was making trigger function generation code harder and harder to maintain and is just a bad practice in general to be making child partitions on the fly with data insertion. This is also not possible with native partitioning, so rather phase out the feature now. Now must use automatic partitioning and schedule frequently enough to keep up with ingestion rate or manually call run_maintenance() via some other means to maintain new partition creation for id-based partition sets.
+-- Added preliminary support for native partitioning methods that will be introduced in PostgreSQL 10. Note this feature is still in very early testing, and could change before the official 10.0 release. But since it's a significant new feature, I want to stay ahead of it and allow real-world testing as early as possible for those interested in it and also make sure it works with pg_partman's own trigger-based partitioning methods as well. (Github Issue #171)
+    -- Use partition_type "native" in the create_parent() or create_sub_parent() functions. See pg_partman.md for more info
+    -- Native Sub-partitioning is a DESTRUCTIVE processes and cannot be run on a table that has any data without losing that data. This is because a table has to be declared natively partitioned at creation (no ALTER statement exists) and the current child tables that must become parents have to be dropped and recreated as such.
+        -- A new parameter flag for create_sub_parent() is included that must be set to "yes" to help ensure this is not accidentally done.
+-- Features NOT (yet) available in native:
+    -- Indexes are not currently possible to create on a partitioned parent table. This means there is currently no automatic index support for native partitioning in pg_partman. Waiting to see what final implementation will be like before adding code to handle this.
+    -- Data that does not match any children causes an error and is not preserved in the parent.
+    -- Foreign keys from partition set to other tables (FKs from other tables to partition sets not supported at all for any partition methods).
+
+-- Removed automatic partition creation via trigger at 50% for id/serial partitioning. Was making trigger function generation code harder to maintain and is just a bad practice in general to be making child partitions on the fly with data insertion. This is also not possible with native partitioning, so rather phase out the feature now. Now must use automatic partitioning and schedule frequently enough to keep up with ingestion rate or manually call run_maintenance() via some other means to maintain new partition creation for id-based partition sets.
     -- The next maintenance run of any id-partitioned table will have its function remove the 50% code-block. Unable to do it as part of the extension update since that would then make the trigger function part of the extension.
+    -- If you encounter any issues caused by this update and the removal of the 50% code, call create_function_id() to recreate the trigger. This function has been added to pg_partman.md for reference.
 
 -- Changed config column & function arguments from "use_run_maintenance" to "automatic_maintenance". This makes the option clearer since manual maintenance can still use the run_maintenance() function.
     -- Valid values are currently: "on", "off"
     -- A value of "on" means that a call of run_maintenance() with no specific table parameter given will cause maintenance to automatically run for that partition set.
     -- A value of "off" means that maintenance will not run in the above situation, but if you give a specific table parameter to run_maintenance(), maintenance can still be run manually for it.
-    -- Note that all partition sets in part_config have set this value to "on" as part of the 3.0.0 upgrade. Since the semantics of the column value have changed, I went with the safe option of turning maintenance for all partitions sets on vs trying to figure out what the intention of previous settings were. Review your configuration after upgrading and the new meanings for this column's value to ensure things are set up properly for your database. 
+    -- Note that all partition sets in part_config have set this value to "on" as part of the 3.0.0 upgrade. Since the semantics of the column value have changed, I went with the safe option of turning maintenance for all partitions sets on vs trying to figure out what the intention of previous settings were. Review your configuration after upgrading and the new meanings for this column's value to ensure things are set up properly for your database. This is most relevant if you had this turned off to avoid automatic serial partition creation at 50%. Now that all serial partitioning requires run_maintenance(), this meaning is no longer relevant.
 
 -- The undo_partition plpgsql functions now return both the number of partitions undone as well as the number of rows copied/moved. Result is returned as a record set, so these functions can be queried as a table to have columns/rows returned. The value of undone partitions will be -1 when an issue is encountered while running the function.
 
 -- Improved performance if infinite_time_partitions flag is set to true. No longer obtains max value of partition set needlessly. (Github Pull Request #169)
 
--- Added create_partition_time() & create_partition_id() to documenation. Had thought they were only really useful internally, but turns out they can be pretty useful in general to fill in missing children gaps. (Github Issue #161).
+-- Added create_partition_time(), create_partition_id(), create_function_time(), create_function_id() to documenation. Had thought they were only really useful internally, but turns out they can be pretty useful in general to fill in missing children gaps and manually fix partition trigger function. (Github Issue #161).
 
 -- Fixed bug with upgrading from version 1.x to 2.x of pg_partman if your version of PostgreSQL had been less than 9.2 at the time the 1.6.0 version of pg_partman came out. The custom_time_partitions table was only created if PostgreSQL was >= than 9.2 since it relies on the range data type. If you then later upgraded to 9.2 or greater, the custom time table was never created and can cause issue with upgrading as well as if a custom time partition set is ever created. Since v2.x of pg_partman only works with PostgreSQL 9.4 and later, forcing this table creation as of v2.x should no longer be an issue (Github Issue #159).
 
@@ -49,15 +59,9 @@
 
 -- Fixed bug in sub-partitioning when a parent was partitioned by time and its children were partitioned by ID. In certain situations, all ID sub-sets were not getting their parent table created. 
 
--- Added preliminary support for native partitioning methods that will be introduced in PostgreSQL 10. Note this feature is still in very early testing, and could change drastically before the official 10.0 release. But since it's a significant new feature, I want to stay ahead of it and allow real-world testing as early as possible for those interested in it and also make sure it works with pg_partman's own trigger-based partitioning methods as well.
-    -- Use partition_type "native" in the create_parent() or create_sub_parent() functions. See pg_partman.md for more info
-    -- Native Sub-partitioning is a DESTRUCTIVE processes and cannot be run on a table that has any data without losing that data. This is because a table has to be declared natively partitioned at creation (no ALTER statement exists) and the current child tables that must become parents have to be dropped and recreated as such.
-        -- A new parameter flag for create_sub_parent() is included that must be set to "yes" to help ensure this is not accidentally done.
--- Features NOT (yet) available in native:
-    -- Indexes are not currently possible to create on a partitioned parent table. This means there is currently no automatic index support for native partitioning in pg_partman. Waiting to see what final implementation will be like before adding code to handle this.
-    -- Data that does not match any children causes an error and is not preserved in the parent.
-    -- Foreign keys from partition set to other tables (FKs from other tables to partition sets not supported at all for any partition methods).
+-- Removed unused p_analyze parameter from create_function_id().
 
+-- Began moving function description comments into the functions themselves so they're visible in the database as well.
 
 ALTER TABLE @extschema@.part_config RENAME COLUMN use_run_maintenance TO automatic_maintenance;
 ALTER TABLE @extschema@.part_config_sub RENAME COLUMN sub_use_run_maintenance TO sub_automatic_maintenance;
@@ -106,12 +110,19 @@ FROM information_schema.routine_privileges
 WHERE routine_schema = '@extschema@'
 AND routine_name = 'undo_partition_time'; 
 
+INSERT INTO partman_preserve_privs_temp 
+SELECT 'GRANT EXECUTE ON FUNCTION @extschema@.create_function_id(text, bigint) TO '||array_to_string(array_agg(grantee::text), ',')||';' 
+FROM information_schema.routine_privileges
+WHERE routine_schema = '@extschema@'
+AND routine_name = 'create_function_id'; 
+
 DROP FUNCTION @extschema@.create_parent(text, text, text, text, text[], int, boolean, text, boolean, text, text, boolean, boolean, boolean);
 DROP FUNCTION @extschema@.create_sub_parent(text, text, text, text, text[], int, text, boolean, text, text, boolean, boolean, boolean); 
 DROP FUNCTION @extschema@.check_subpart_sameconfig(text);
 DROP FUNCTION @extschema@.undo_partition(text, int, boolean, boolean, numeric);
 DROP FUNCTION @extschema@.undo_partition_id(text, int, bigint, boolean, numeric);
 DROP FUNCTION @extschema@.undo_partition_time(text, int, interval, boolean, numeric);
+DROP FUNCTION @extschema@.create_function_id(text, bigint, boolean); 
 
 -- This was also added in the 1.8.7--2.0.0.sql file to account for changes to the table being done in subsequent updates
 CREATE TABLE IF NOT EXISTS @extschema@.custom_time_partitions (
@@ -134,30 +145,32 @@ END
 $$;
 SELECT pg_catalog.pg_extension_config_dump('custom_time_partitions', '');
 
-/*
- * Check for valid config table partition types
- */
+
 CREATE OR REPLACE FUNCTION check_partition_type (p_type text) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER
     AS $$
 DECLARE
 v_result    boolean;
 BEGIN
+/*
+ * Check for valid config table partition types
+ */
     SELECT p_type IN ('partman', 'time-custom', 'native') INTO v_result;
     RETURN v_result;
 END
 $$;
 
-/* 
- * Check for valid config values for automatic maintenance
- * (not boolean to allow future values)
- */
+
 CREATE FUNCTION check_automatic_maintenance_value (p_automatic_maintenance text) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER
     AS $$
 DECLARE
 v_result    boolean;
 BEGIN
+/* 
+ * Check for valid config values for automatic maintenance
+ * (not boolean to allow future values)
+ */
     SELECT p_automatic_maintenance IN ('on', 'off') INTO v_result;
     RETURN v_result;
 END
@@ -194,10 +207,6 @@ CREATE OR REPLACE VIEW @extschema@.table_privs AS
                OR grantee.rolname = 'PUBLIC' );
 
 
-/*
-* Function to apply cluster from parent to child table
-* Adapted from code fork by https://github.com/dturon/pg_partman
-*/
 CREATE OR REPLACE FUNCTION apply_cluster(p_parent_schema text, p_parent_tablename text, p_child_schema text, p_child_tablename text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER 
 AS $$
@@ -209,6 +218,10 @@ DECLARE
     v_row               record;
     v_sql               text;
 BEGIN
+/*
+* Function to apply cluster from parent to child table
+* Adapted from code fork by https://github.com/dturon/pg_partman
+*/
     
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');
@@ -267,9 +280,6 @@ END;
 $$;
 
 
-/*
- * Apply constraints managed by partman extension
- */
 CREATE OR REPLACE FUNCTION apply_constraints(p_parent_table text, p_child_table text DEFAULT NULL, p_analyze boolean DEFAULT FALSE, p_job_id bigint DEFAULT NULL, p_debug boolean DEFAULT FALSE) RETURNS void
     LANGUAGE plpgsql
     AS $$
@@ -314,6 +324,9 @@ v_suffix_position               int;
 v_type                          text;
 
 BEGIN
+/*
+ * Apply constraints managed by partman extension
+ */
 
 SELECT parent_table
     , partition_type
@@ -532,9 +545,6 @@ END
 $$;
 
 
-/*
- * Apply foreign keys that exist on the given parent to the given child table
- */
 CREATE OR REPLACE FUNCTION apply_foreign_keys(p_parent_table text, p_child_table text, p_job_id bigint DEFAULT NULL, p_debug boolean DEFAULT false) RETURNS void
     LANGUAGE plpgsql
     AS $$
@@ -561,6 +571,9 @@ v_step_id           bigint;
 v_tablename         text;
 
 BEGIN
+/*
+ * Apply foreign keys that exist on the given parent to the given child table
+ */
 
 SELECT jobmon INTO v_jobmon FROM @extschema@.part_config WHERE parent_table = p_parent_table;
 
@@ -673,9 +686,6 @@ END
 $$;
 
 
-/*
- * Apply privileges that exist on a given parent to the given child table
- */
 CREATE OR REPLACE FUNCTION apply_privileges(p_parent_schema text, p_parent_tablename text, p_child_schema text, p_child_tablename text, p_job_id bigint DEFAULT NULL) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -701,6 +711,9 @@ v_sql               text;
 v_step_id           bigint;
 
 BEGIN
+/*
+ * Apply privileges and ownership that exist on a given parent to the given child table
+ */
 
 SELECT jobmon INTO v_jobmon FROM @extschema@.part_config WHERE parent_table = p_parent_schema ||'.'|| p_parent_tablename;
 IF v_jobmon IS NULL THEN
@@ -866,13 +879,13 @@ END
 $$;
 
 
+CREATE FUNCTION check_control_type(p_parent_schema text, p_parent_tablename text, p_control text) RETURNS TABLE (general_type text, exact_type text) 
+    LANGUAGE sql STABLE SECURITY DEFINER
+AS $$
 /* 
  * Return column type for given table & column in that table
  * Returns NULL of objects don't exist
  */
-CREATE FUNCTION check_control_type(p_parent_schema text, p_parent_tablename text, p_control text) RETURNS TABLE (general_type text, exact_type text) 
-    LANGUAGE sql STABLE SECURITY DEFINER
-AS $$
 
 SELECT CASE 
         WHEN typname IN ('timestamptz', 'timestamp', 'date') THEN
@@ -891,12 +904,6 @@ SELECT CASE
 $$;
 
 
-/*
- * Truncate the name of the given object if it is greater than the postgres default max (63 characters).
- * Also appends given suffix and schema if given and truncates the name so that the entire suffix will fit.
- * Returns original name with schema given if it doesn't require truncation
- * Given security definer since it's called by the trigger functions
- */
 CREATE OR REPLACE FUNCTION check_name_length (p_object_name text, p_suffix text DEFAULT NULL, p_table_partition boolean DEFAULT FALSE) RETURNS text
     LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER
     AS $$
@@ -904,6 +911,12 @@ DECLARE
     v_new_length    int;
     v_new_name      text;
 BEGIN
+/*
+ * Truncate the name of the given object if it is greater than the postgres default max (63 characters).
+ * Also appends given suffix and schema if given and truncates the name so that the entire suffix will fit.
+ * Returns original name with schema given if it doesn't require truncation
+ * Given security definer since it's called by the trigger functions
+ */
 
 IF p_table_partition IS TRUE AND (p_suffix IS NULL) THEN
     RAISE EXCEPTION 'Table partition name requires a suffix value';
@@ -931,12 +944,6 @@ END
 $$;
 
 
-/*
- * Check for consistent data in part_config_sub table. Was unable to get this working properly as either a constraint or trigger. 
- * Would either delay raising an error until the next write (which I cannot predict) or disallow future edits to update a sub-partition set's configuration.
- * This is called by run_maintainance() and at least provides a consistent way to check that I know will run. 
- * If anyone can get a working constraint/trigger, please help!
-*/
 CREATE FUNCTION @extschema@.check_subpart_sameconfig(p_parent_table text) 
     RETURNS TABLE (sub_partition_type text
         , sub_control text
@@ -960,6 +967,12 @@ CREATE FUNCTION @extschema@.check_subpart_sameconfig(p_parent_table text)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = @extschema@,pg_temp
 AS $$
+/*
+ * Check for consistent data in part_config_sub table. Was unable to get this working properly as either a constraint or trigger. 
+ * Would either delay raising an error until the next write (which I cannot predict) or disallow future edits to update a sub-partition set's configuration.
+ * This is called by run_maintainance() and at least provides a consistent way to check that I know will run. 
+ * If anyone can get a working constraint/trigger, please help!
+*/
 
     WITH parent_info AS (
         SELECT c1.oid
@@ -1000,11 +1013,6 @@ AS $$
 $$;
 
 
-/*
- * Check PostgreSQL version number. Parameter must be full 3 point version if prior to 10.0. Otherwise 2 point version.
- * Returns true if current version is greater than or equal to the parameter given.
- * If running version is devel, alpha, beta or rc, the check always returns true.
- */
 CREATE OR REPLACE FUNCTION check_version(p_check_version text) RETURNS boolean
     LANGUAGE plpgsql STABLE
     AS $$
@@ -1014,6 +1022,11 @@ v_check_version     text[];
 v_current_version   text[] := string_to_array(current_setting('server_version'), '.');
  
 BEGIN
+/*
+ * Check PostgreSQL version number. Parameter must be full 3 point version if prior to 10.0. Otherwise 2 point version.
+ * Returns true if current version is greater than or equal to the parameter given.
+ * If running version is devel, alpha, beta or rc, the check always returns true.
+ */
 
 v_check_version := string_to_array(p_check_version, '.');
 
@@ -1052,11 +1065,6 @@ END
 $$;
 
 
-/*
- * Check if parent table is a subpartition of an already existing partition set managed by pg_partman
- *  If so, return the limits of what child tables can be created under the given parent table based on its own suffix
- *  If not, return NULL. Allows caller to check for NULL and then know if the given parent has sub-partition limits.
- */
 CREATE OR REPLACE FUNCTION check_subpartition_limits(p_parent_table text, p_type text, OUT sub_min text, OUT sub_max text) RETURNS record
     LANGUAGE plpgsql
     AS $$
@@ -1072,6 +1080,11 @@ v_top_schema            text;
 v_top_tablename         text;
 
 BEGIN
+/*
+ * Check if parent table is a subpartition of an already existing partition set managed by pg_partman
+ *  If so, return the limits of what child tables can be created under the given parent table based on its own suffix
+ *  If not, return NULL. Allows caller to check for NULL and then know if the given parent has sub-partition limits.
+ */
 
 SELECT n.nspname, c.relname INTO v_parent_schema, v_parent_tablename
 FROM pg_catalog.pg_class c
@@ -1123,10 +1136,7 @@ END
 $$;
 
 
-/*
- * Create the trigger function for the parent table of an id-based partition set
- */
-CREATE OR REPLACE FUNCTION create_function_id(p_parent_table text, p_job_id bigint DEFAULT NULL, p_analyze boolean DEFAULT true) RETURNS void
+CREATE FUNCTION create_function_id(p_parent_table text, p_job_id bigint DEFAULT NULL) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 DECLARE
@@ -1173,6 +1183,9 @@ v_trigger_return_null           boolean;
 v_upsert                        text;
 
 BEGIN
+/*
+ * Create the trigger function for the parent table of an id-based partition set
+ */
 
 SELECT partition_interval::bigint
     , control
@@ -1430,9 +1443,6 @@ END
 $$;
 
 
-/*
- * Create the trigger function for the parent table of a time-based partition set
- */
 CREATE OR REPLACE FUNCTION create_function_time(p_parent_table text, p_job_id bigint DEFAULT NULL) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -1475,6 +1485,9 @@ v_type                          text;
 v_upsert                        text;
 
 BEGIN
+/*
+ * Create the trigger function for the parent table of a time-based partition set
+ */
 
 SELECT partition_type
     , partition_interval::interval
@@ -1781,9 +1794,6 @@ END
 $$;
 
 
-/*
- * Function to turn a table into the parent of a partition set
- */
 CREATE FUNCTION create_parent(
     p_parent_table text
     , p_control text
@@ -1851,6 +1861,9 @@ v_top_parent_schema             text := split_part(p_parent_table, '.', 1);
 v_top_parent_table              text := split_part(p_parent_table, '.', 2);
 
 BEGIN
+/*
+ * Function to turn a table into the parent of a partition set
+ */
 
 IF position('.' in p_parent_table) = 0  THEN
     RAISE EXCEPTION 'Parent table must be schema qualified';
@@ -2437,9 +2450,6 @@ END
 $$;
 
 
-/*
- * Function to create id partitions
- */
 CREATE OR REPLACE FUNCTION create_partition_id(p_parent_table text, p_partition_ids bigint[], p_analyze boolean DEFAULT true, p_debug boolean DEFAULT false) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -2482,6 +2492,9 @@ v_sub_id_min            bigint;
 v_unlogged              char;
 
 BEGIN
+/*
+ * Function to create id partitions
+ */
 
 SELECT control
     , partition_type
@@ -2762,9 +2775,6 @@ END
 $$;
 
 
-/*
- * Function to create a child table in a time-based partition set
- */
 CREATE OR REPLACE FUNCTION create_partition_time(p_parent_table text, p_partition_times timestamptz[], p_analyze boolean DEFAULT true, p_debug boolean DEFAULT false) 
 RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
@@ -2820,6 +2830,9 @@ v_unlogged                      char;
 v_year                          text;
 
 BEGIN
+/*
+ * Function to create a child table in a time-based partition set
+ */
 
 SELECT c.partition_type
     , c.control
@@ -3193,14 +3206,6 @@ END
 $$;
 
 
-/*
- * Create a partition set that is a subpartition of an already existing partition set.
- * Given the parent table of any current partition set, it will turn all existing children into parent tables of their own partition sets
- *      using the configuration options given as parameters to this function.
- * Uses another config table that allows for turning all future child partitions into a new parent automatically.
- * To avoid logical complications and contention issues, ALL subpartitions must be maintained using run_maintenance().
- * This means the automatic, trigger based partition creation for serial partitioning will not work if it is a subpartition.
- */
 CREATE OR REPLACE FUNCTION create_sub_parent(
     p_top_parent text
     , p_control text
@@ -3249,6 +3254,12 @@ v_success               boolean := false;
 v_top_type              text;
 
 BEGIN
+/*
+ * Create a partition set that is a subpartition of an already existing partition set.
+ * Given the parent table of any current partition set, it will turn all existing children into parent tables of their own partition sets
+ *      using the configuration options given as parameters to this function.
+ * Uses another config table that allows for turning all future child partitions into a new parent automatically.
+ */
 
 SELECT n.nspname, c.relname, c.relkind INTO v_parent_schema, v_parent_tablename, v_parent_relkind
 FROM pg_catalog.pg_class c
@@ -3464,9 +3475,6 @@ END
 $$;
 
 
-/*
- * Function to create partitioning trigger on parent table
- */
 CREATE OR REPLACE FUNCTION create_trigger(p_parent_table text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -3483,6 +3491,9 @@ v_trig_name             text;
 v_trig_sql              text;
 
 BEGIN
+/*
+ * Function to create partitioning trigger on parent table
+ */
 
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');
@@ -3517,10 +3528,6 @@ END
 $$;
 
 
-/*
- * Function to drop child tables from an id-based partition set. 
- * Options to move table to different schema, drop only indexes or actually drop the table from the database.
- */
 CREATE OR REPLACE FUNCTION drop_partition_id(p_parent_table text, p_retention bigint DEFAULT NULL, p_keep_table boolean DEFAULT NULL, p_keep_index boolean DEFAULT NULL, p_retention_schema text DEFAULT NULL) RETURNS int
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -3555,6 +3562,10 @@ v_row_max_id                record;
 v_step_id                   bigint;
 
 BEGIN
+/*
+ * Function to drop child tables from an id-based partition set. 
+ * Options to move table to different schema, drop only indexes or actually drop the table from the database.
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman drop_partition_id'));
 IF v_adv_lock = 'false' THEN
@@ -3791,10 +3802,6 @@ END
 $$;
 
 
-/*
- * Function to drop child tables from a time-based partition set.
- * Options to move table to different schema, drop only indexes or actually drop the table from the database.
- */
 CREATE OR REPLACE FUNCTION drop_partition_time(p_parent_table text, p_retention interval DEFAULT NULL, p_keep_table boolean DEFAULT NULL, p_keep_index boolean DEFAULT NULL, p_retention_schema text DEFAULT NULL) RETURNS int
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -3829,6 +3836,10 @@ v_row                       record;
 v_step_id                   bigint;
 
 BEGIN
+/*
+ * Function to drop child tables from a time-based partition set.
+ * Options to move table to different schema, drop only indexes or actually drop the table from the database.
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman drop_partition_time'));
 IF v_adv_lock = 'false' THEN
@@ -4070,9 +4081,6 @@ END
 $$;
 
 
-/*
- * Populate the child table(s) of an id-based partition set with old data from the original parent
- */
 CREATE OR REPLACE FUNCTION partition_data_id(p_parent_table text
         , p_batch_count int DEFAULT 1
         , p_batch_interval bigint DEFAULT NULL
@@ -4104,6 +4112,9 @@ v_start_control             bigint;
 v_total_rows                bigint := 0;
 
 BEGIN
+/*
+ * Populate the child table(s) of an id-based partition set with old data from the original parent
+ */
 
 SELECT partition_interval::bigint
     , control
@@ -4229,9 +4240,6 @@ END
 $$;
 
 
-/*
- * Populate the child table(s) of a time-based partition set with old data from the original parent
- */
 CREATE OR REPLACE FUNCTION partition_data_time(
         p_parent_table text
         , p_batch_count int DEFAULT 1
@@ -4271,6 +4279,9 @@ v_type                      text;
 v_year                      text;
 
 BEGIN
+/*
+ * Populate the child table(s) of a time-based partition set with old data from the original parent
+ */
 
 SELECT partition_type
     , partition_interval::interval
@@ -4457,14 +4468,6 @@ END
 $$;
 
 
-/*
- * Function to manage pre-creation of the next partitions in a set.
- * Also manages dropping old partitions if the retention option is set.
- * If p_parent_table is passed, will only run run_maintenance() on that one table (no matter what the configuration table may have set for it)
- * Otherwise, will run on all tables in the config table with p_automatic_maintenance() set to true.
- * For large partition sets, running analyze can cause maintenance to take longer than expected. Can set p_analyze to false to avoid a forced analyze run.
- * Be aware that constraint exclusion may not work properly until an analyze on the partition set is run. 
- */
 CREATE OR REPLACE FUNCTION run_maintenance(p_parent_table text DEFAULT NULL, p_analyze boolean DEFAULT true, p_jobmon boolean DEFAULT true, p_debug boolean DEFAULT false) RETURNS void 
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -4520,6 +4523,14 @@ v_tablename                     text;
 v_tables_list_sql               text;
 
 BEGIN
+/*
+ * Function to manage pre-creation of the next partitions in a set.
+ * Also manages dropping old partitions if the retention option is set.
+ * If p_parent_table is passed, will only run run_maintenance() on that one table (no matter what the configuration table may have set for it)
+ * Otherwise, will run on all tables in the config table with p_automatic_maintenance() set to true.
+ * For large partition sets, running analyze can cause maintenance to take longer than expected. Can set p_analyze to false to avoid a forced analyze run.
+ * Be aware that constraint exclusion may not work properly until an analyze on the partition set is run. 
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman run_maintenance'));
 IF v_adv_lock = 'false' THEN
@@ -4824,11 +4835,6 @@ END
 $$;
 
 
-/*
- * Show the data boundries for a given child table as well as the suffix that will be used.
- * Passing the parent table argument improves performance by avoiding a catalog lookup.
- * Passing an interval lets you set one different than the default configured one if desired.
- */
 CREATE OR REPLACE FUNCTION show_partition_info(p_child_table text
     , p_partition_interval text DEFAULT NULL
     , p_parent_table text DEFAULT NULL
@@ -4859,6 +4865,11 @@ v_suffix_position       int;
 v_year                  text;
 
 BEGIN
+/*
+ * Show the data boundries for a given child table as well as the suffix that will be used.
+ * Passing the parent table argument improves performance by avoiding a catalog lookup.
+ * Passing an interval lets you set one different than the default configured one if desired.
+ */
 
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');
@@ -4945,11 +4956,6 @@ END
 $$;
 
 
-/*
- * Given a parent table and partition value, return the name of the child partition it would go in.
- * If using epoch time partitioning, give the text representation of the timestamp NOT the epoch integer value (use to_timestamp() to convert epoch values).
- * Also returns just the suffix value and true if the child table exists or false if it does not
- */
 CREATE OR REPLACE FUNCTION show_partition_name(p_parent_table text, p_value text, OUT partition_table text, OUT suffix_timestamp timestamptz, OUT suffix_id bigint, OUT table_exists boolean) RETURNS record
     LANGUAGE plpgsql STABLE
     AS $$
@@ -4968,6 +4974,11 @@ v_partition_interval    text;
 v_type                  text;
 
 BEGIN
+/*
+ * Given a parent table and partition value, return the name of the child partition it would go in.
+ * If using epoch time partitioning, give the text representation of the timestamp NOT the epoch integer value (use to_timestamp() to convert epoch values).
+ * Also returns just the suffix value and true if the child table exists or false if it does not
+ */
 
 SELECT partition_type 
     , control
@@ -5080,9 +5091,6 @@ END
 $$;
 
 
-/*
- * Function to list all child partitions in a set in logical order.
- */
 CREATE OR REPLACE FUNCTION show_partitions (p_parent_table text, p_order text DEFAULT 'ASC') RETURNS TABLE (partition_schemaname text, partition_tablename text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER 
     AS $$
@@ -5102,6 +5110,9 @@ v_type                  text;
 v_year                  text;
 
 BEGIN
+/*
+ * Function to list all child partitions in a set in logical order.
+ */
 
 SELECT current_setting('search_path') INTO v_old_search_path;
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_new_search_path, 'false');
@@ -5183,9 +5194,6 @@ END
 $$;
 
 
-/*
- * Stop a given parent table from causing its children to be subpartitioned
- */
 CREATE FUNCTION stop_sub_partition(p_parent_table text, p_jobmon boolean DEFAULT true) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -5196,6 +5204,9 @@ v_jobmon_schema     text;
 v_step_id           bigint;
 
 BEGIN
+/*
+ * Stop a given parent table from causing its children to be subpartitioned
+ */
 
 IF p_jobmon THEN
     SELECT nspname INTO v_jobmon_schema FROM pg_catalog.pg_namespace n, pg_catalog.pg_extension e WHERE e.extname = 'pg_jobmon'::name AND e.extnamespace = n.oid;
@@ -5219,10 +5230,6 @@ END
 $$;
 
 
-/*
- * Function to undo partitioning. Copies data to parent without removing any data from children.
- * Will actually work on any non-native parent/child table set, not just ones created by pg_partman.
- */
 CREATE FUNCTION undo_partition(p_parent_table text, p_batch_count int DEFAULT 1, p_keep_table boolean DEFAULT true, p_jobmon boolean DEFAULT true, p_lock_wait numeric DEFAULT 0, OUT partitions_undone int, OUT rows_undone bigint) RETURNS record 
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -5257,6 +5264,10 @@ v_type                  text;
 v_undo_count            int := 0;
 
 BEGIN
+/*
+ * Function to undo partitioning. Copies data to parent without removing any data from children.
+ * Will actually work on any non-native parent/child table set, not just ones created by pg_partman.
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition'));
 IF v_adv_lock = 'false' THEN
@@ -5486,9 +5497,6 @@ END
 $$;
 
 
-/*
- * Function to undo id-based partitioning created by this extension
- */
 CREATE FUNCTION undo_partition_id(p_parent_table text, p_batch_count int DEFAULT 1, p_batch_interval bigint DEFAULT NULL, p_keep_table boolean DEFAULT true, p_lock_wait numeric DEFAULT 0, OUT partitions_undone int, OUT rows_undone bigint) RETURNS record 
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -5529,6 +5537,9 @@ v_total                 bigint := 0;
 v_undo_count            int := 0;
 
 BEGIN
+/*
+ * Function to undo id-based partitioning created by this extension
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition_id'));
 IF v_adv_lock = 'false' THEN
@@ -5818,9 +5829,6 @@ END
 $$;
 
 
-/*
- * Function to undo time-based partitioning created by this extension
- */
 CREATE FUNCTION undo_partition_time(p_parent_table text, p_batch_count int DEFAULT 1, p_batch_interval interval DEFAULT NULL, p_keep_table boolean DEFAULT true, p_lock_wait numeric DEFAULT 0, OUT partitions_undone int, OUT rows_undone bigint) RETURNS record
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -5862,6 +5870,9 @@ v_type                  text;
 v_undo_count            int := 0;
 
 BEGIN
+/*
+ * Function to undo time-based partitioning created by this extension
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition_time'));
 IF v_adv_lock = 'false' THEN
@@ -6164,13 +6175,6 @@ END
 $$;
 
 
-/*
- * Function to undo native partitioning. 
- * Moves data to new, target table since data cannot be moved to parent.
- * Leaves old parent table as is and does not change name of new table.
- * Note that target schema can be different than old parent.
- * Should work on native partitioned tables not managed by pg_partman as well.
- */
 CREATE FUNCTION undo_partition_native(p_parent_table text, p_target_table text, p_batch_count int DEFAULT 1, p_batch_interval text DEFAULT NULL, p_keep_table boolean DEFAULT true, p_lock_wait numeric DEFAULT 0, OUT partitions_undone int, OUT rows_undone bigint) RETURNS record
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -6214,6 +6218,13 @@ v_total                 bigint := 0;
 v_undo_count            int := 0;
 
 BEGIN
+/*
+ * Function to undo native partitioning. 
+ * Moves data to new, target table since data cannot be moved to parent.
+ * Leaves old parent table as is and does not change name of new table.
+ * Note that target schema can be different than old parent.
+ * Should work on native partitioned tables not managed by pg_partman as well.
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman undo_partition_native'));
 IF v_adv_lock = 'false' THEN
@@ -6563,6 +6574,7 @@ DETAIL: %
 HINT: %', ex_message, ex_context, ex_detail, ex_hint;
 END
 $$;
+
 
 -- Restore dropped object privileges
 DO $$

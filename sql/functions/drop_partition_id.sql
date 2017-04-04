@@ -1,7 +1,3 @@
-/*
- * Function to drop child tables from an id-based partition set. 
- * Options to move table to different schema, drop only indexes or actually drop the table from the database.
- */
 CREATE FUNCTION drop_partition_id(p_parent_table text, p_retention bigint DEFAULT NULL, p_keep_table boolean DEFAULT NULL, p_keep_index boolean DEFAULT NULL, p_retention_schema text DEFAULT NULL) RETURNS int
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
@@ -36,6 +32,10 @@ v_row_max_id                record;
 v_step_id                   bigint;
 
 BEGIN
+/*
+ * Function to drop child tables from an id-based partition set. 
+ * Options to move table to different schema, drop only indexes or actually drop the table from the database.
+ */
 
 v_adv_lock := pg_try_advisory_xact_lock(hashtext('pg_partman drop_partition_id'));
 IF v_adv_lock = 'false' THEN
@@ -270,5 +270,4 @@ DETAIL: %
 HINT: %', ex_message, ex_context, ex_detail, ex_hint;
 END
 $$;
-
 

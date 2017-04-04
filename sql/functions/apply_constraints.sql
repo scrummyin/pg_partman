@@ -1,6 +1,3 @@
-/*
- * Apply constraints managed by partman extension
- */
 CREATE FUNCTION apply_constraints(p_parent_table text, p_child_table text DEFAULT NULL, p_analyze boolean DEFAULT FALSE, p_job_id bigint DEFAULT NULL, p_debug boolean DEFAULT FALSE) RETURNS void
     LANGUAGE plpgsql
     AS $$
@@ -45,6 +42,9 @@ v_suffix_position               int;
 v_type                          text;
 
 BEGIN
+/*
+ * Apply constraints managed by partman extension
+ */
 
 SELECT parent_table
     , partition_type

@@ -1,6 +1,3 @@
-/*
- * Function to turn a table into the parent of a partition set
- */
 CREATE FUNCTION create_parent(
     p_parent_table text
     , p_control text
@@ -68,6 +65,9 @@ v_top_parent_schema             text := split_part(p_parent_table, '.', 1);
 v_top_parent_table              text := split_part(p_parent_table, '.', 2);
 
 BEGIN
+/*
+ * Function to turn a table into the parent of a partition set
+ */
 
 IF position('.' in p_parent_table) = 0  THEN
     RAISE EXCEPTION 'Parent table must be schema qualified';
@@ -652,3 +652,5 @@ DETAIL: %
 HINT: %', ex_message, ex_context, ex_detail, ex_hint;
 END
 $$;
+
+
