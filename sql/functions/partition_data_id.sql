@@ -147,7 +147,7 @@ FOR i IN 1..p_batch_count LOOP
 
 END LOOP;
 
-PERFORM @extschema@.create_function_id(p_parent_table, NULL, p_analyze);
+PERFORM @extschema@.create_function_id(p_parent_table);
 
 EXECUTE format('SELECT set_config(%L, %L, %L)', 'search_path', v_old_search_path, 'false');
 
@@ -155,5 +155,4 @@ RETURN v_total_rows;
 
 END
 $$;
-
 
